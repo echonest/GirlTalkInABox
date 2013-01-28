@@ -1,0 +1,154 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<link rel="stylesheet" href="styles.css" type="text/css" media="screen">
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<link href="bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.9.1/jquery-ui.min.js"></script>
+<script src="js/underscore-min.js" type="text/javascript" charset="utf-8"></script>
+<title> Girl Talk in a Box</title>
+</head>
+
+<body>
+<div id="wrap" class="navbar navbar-inverse">
+  <div class="navbar-inner">
+    <div class="container">
+      <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </a>
+      <a id='show-search' class="brand">Girl Talk in a Box</a>
+      <div class="nav-collapse collapse">
+        <ul class="nav">
+          <li><a id='show-main'  href="index.html">Main</a></li>
+          <li><a id='show-gallery'  href="gallery.html">Gallery of songs</a></li>
+          <li class="active"><a id='show-loader' href="loader.html">Upload a song</a></li>
+          <li><a id='show-help' href="help.html">Help</a></li>
+          <li><a id='show-about' href="about.html">About</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="hero" class="hero-unit">
+  <div class="container">
+    <h2> Upload a song</h2>
+        Upload a song to Girl Talk in a Box
+
+        <div id='select-track'>
+            <form action="https://s3.amazonaws.com/static.echonest.com" method="post" enctype="multipart/form-data">
+              <input id='f-filename' type="hidden" name="key" value="audio2/${filename}">
+              <input id='f-key' type="hidden" name="AWSAccessKeyId" value="YOUR_AWS_ACCESS_KEY"> 
+              <input type="hidden" name="acl" value="public-read"> 
+              <input type="hidden" name="success_action_redirect"
+                  value="http://static.echonest.com/girltalkinabox/go.html">
+              <input id='f-policy' type="hidden" name="policy" value="YOUR_POLICY_DOCUMENT_BASE64_ENCODED">
+              <input id='f-signature' type="hidden" name="signature" value="YOUR_CALCULATED_SIGNATURE">
+              <input type="hidden" name="Content-Type" value="audio/mpeg">
+              <!-- Include any additional input fields here -->
+              Select an <b>MP3</b> to upload : <input  id="file" name="file" type="file"> 
+              <br>
+              <input class="btn btn-primary btn-default" id='upload' type="submit" value="Upload MP3"> 
+            </form> 
+        </div>
+        <div id='info'> </div> 
+        </div>
+  </div>
+</div>
+
+</body>
+
+<script type="text/javascript">
+
+// This code will make you cry. It was written in a mad 
+// dash during Music Hack Day Boston 2012, and has
+// quite a bit of hackage of the bad kind in it.
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-3675615-27']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type =
+'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' :
+'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0];
+s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+
+<script type="text/javascript">
+
+
+function info(s) {
+    $("#info").text(s);
+}
+
+
+function endsWith(str, suffix) {
+    return str.indexOf(suffix, str.length - suffix.length) !== -1;
+}
+
+function fetchSignature() {
+    var url = 'http://labs.echonest.com/Uploader/policy?callback=?'
+    $.getJSON(url, {}, function(data) {
+        console.log(url);
+        policy = data.policy;
+        signature = data.signature;
+        $('#f-policy').val(data.policy);
+        $('#f-signature').val(data.signature);
+        $('#f-key').val(data.key);
+    });
+}
+
+
+function fetchQinfo() {
+    var url = 'http://labs.echonest.com/Uploader/qinfo?callback=?'
+    $.getJSON(url, {}, function(data) {
+        info("Estimated analysis time: " + Math.floor(data.estimated_wait * 1.2) + " seconds.");
+    });
+}
+
+function randomName() {
+    return new Date().getTime() + '-' + Math.floor(Math.random() * 100000000)
+}
+
+
+function fixFileName(name) {
+    name = name.replace(/c:\\fakepath\\/i, '');
+    name = name.replace(/[^A-Z0-9.\-]+/gi, ' ');
+    return 'audio2/' + new Date().getTime() + '/' + name;
+}
+
+
+function init() {
+    $("#f-filename").attr('value', 'audio2/' + randomName() + '.mp3');
+
+    $("#file").change( 
+        function() {
+            var filename = $("#file").val();
+            if (endsWith(filename.toLowerCase(), ".mp3")) {
+                $("#f-filename").attr('value', fixFileName(filename));
+                $("#upload").removeAttr('disabled');
+            } else {
+                alert('Sorry, this app only supports MP3s');
+                $("#upload").attr('disabled', 'disabled');
+            }
+        }
+    );
+    fetchSignature();
+    fetchQinfo();
+}
+
+window.onload = init;
+
+
+</script>
+</body>
+</html>
+
+

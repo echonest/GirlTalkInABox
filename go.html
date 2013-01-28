@@ -1,0 +1,1123 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<script src="js/raphael-min.js" type="text/javascript" charset="utf-8"></script>
+<link href="bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
+<link rel="stylesheet" href="styles.css" type="text/css" media="screen">
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.9.1/jquery-ui.min.js"></script>
+<script src="js/underscore-min.js" type="text/javascript" charset="utf-8"></script>
+<script type="text/javascript" src="jremix.js"></script> 
+<title> Girl Talk in a Box</title>
+</head>
+
+<body>
+<div id="wrap" class="navbar navbar-inverse">
+  <div class="navbar-inner">
+    <div class="container">
+      <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </a>
+      <a id='show-search' class="brand">Girl Talk in a Box</a>
+      <div class="nav-collapse collapse">
+        <ul class="nav">
+          <li><a id='show-main'  href="index.html">Main</a></li>
+          <li><a id='show-gallery' href="gallery.html" >Gallery of songs</a></li>
+          <li><a id='show-loader' href="loader.html">Upload a song</a></li>
+          <li><a id='show-help' href="help.html">Help</a></li>
+          <li><a id='show-about' href="about.html">About</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id='info'> </div> 
+<div id="help" class="hero-unit">
+  <div class="container">
+    <h2> Girl Talk in a box</h2>
+        <p>
+            Puts you in control of your favorite song.
+        <p>
+        Controls:
+        <ul>
+            <li> mouse click - start playing from the clicked beat
+            <li> space - start and stop playing the song
+            <li> arrows - control song cursor velocity
+            <li> w/a/s/d - move the song cursor
+            <li> &lt; &gt; ? - controls the beat period 
+            <li> b - toggle between beats and tatums
+            <li> shift+key - bookmark a beat
+            <li> [/] - set loop points
+        </ul>
+        See 'help' for more info
+  </div>
+</div>
+
+
+<div id="hero">
+    <div id='tiles'></div>
+    <div id="stats">
+        <span id="numbers"> 
+            Tile: <span class='nval' id='tile'> 1 </span> 
+            Period: <span class='nval' id='speed'> 100 </span> 
+            Incr: <span class='nval' id='incr'>1</span> 
+        </span>
+    </div>
+</div>
+
+
+</body>
+<script src="bootstrap/js/bootstrap.min.js"></script>
+
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-3675615-27']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type =
+'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' :
+'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0];
+s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+
+<script type="text/javascript">
+
+var remixer;
+var player;
+var driver;
+var track;
+var effects;
+
+var paper;
+var tiles = [];
+var selectedTile;
+var mouseOverTile;
+
+var shifted = false;
+var controlled = false;
+var chartReady;
+var draggedOver = null;
+
+// From Crockford, Douglas (2008-12-17). JavaScript: The Good Parts (Kindle Locations 734-736). Yahoo Press.
+
+if (typeof Object.create !== 'function') { 
+    Object.create = function (o) { 
+        var F = function () {};
+        F.prototype = o; 
+        return new F(); 
+    }; 
+}
+
+function info(s) {
+    $("#info").text(s);
+}
+
+function goBars() {
+    removeAllTiles();
+    createTilePanel('bars');
+}
+
+function goBeats() {
+    removeAllTiles();
+    createTilePanel('beats');
+}
+
+function goTatums() {
+    removeAllTiles();
+    createTilePanel('tatums');
+}
+
+
+function stop() {
+    player.stop();
+    player = remixer.getPlayer();
+}
+
+function createTiles(qtype) {
+    var tiles = [];
+    var qlist = track.analysis[qtype];
+    for (var i = 0; i < qlist.length; i++) {
+        tiles.push(createTile(i, qlist[i]));
+    }
+    return tiles;
+}
+
+
+function getTitle(title, artist, url) {
+    if (title == undefined || title.length == 0 || title === '(unknown title)' || title == 'undefined') {
+        if (url) {
+            title = extractTitle(url);
+        } else {
+            title = null;
+        }
+    } else {
+        if (artist !== '(unknown artist)') {
+            title = title + ' by ' + artist;
+        } 
+    }
+    return title;
+}
+
+function loadTrack(trid) {
+    fetchAnalysis(trid);
+}
+
+function setDisplayMode(playMode) {
+    if (playMode) {
+        $("#help").hide();
+        $("#hero").show();
+    } else {
+        $("#help").show();
+        $("#hero").hide();
+    } 
+}
+
+
+function showTrackTitle(t) {
+    info(t.title + ' by ' + t.artist);
+}
+
+function readyToPlay(t) {
+    if (t.status === 'ok') {
+        setDisplayMode(true);
+        info("ready!");
+        normalizeColor();
+        goBeats();
+        showTrackTitle(t);
+    } else {
+        info(t.status);
+    }
+}
+
+function rearrange(insertBefore, tile, anchor) {
+    var firstIndex = _.indexOf(tiles, tile);
+    tiles.splice(firstIndex, 1);
+
+    var newIndex = _.indexOf(tiles, anchor);
+    if (!insertBefore) {
+        newIndex += 1;
+    }
+    tiles.splice(newIndex, 0, tile);
+}
+
+function insert(insertBefore, tile, anchor) {
+    var newIndex = _.indexOf(tiles, anchor);
+    if (!insertBefore) {
+        newIndex += 1;
+    }
+
+    tiles.splice(newIndex, 0, tile);
+}
+
+function gotTheAnalysis(profile) {
+    var status = get_status(profile);
+    if (status == 'complete') {
+        info("Loading track ...");
+        remixer.remixTrack(profile.response.track, function(state, t, percent) {
+            track = t;
+            if (state == 1) {
+                info("Here we go ...");
+                setTimeout( function() { readyToPlay(t); }, 10);
+            } else if (state == 0) {
+                if (percent >= 99) {
+                    info("Here we go ...");
+                } else {
+                    info( percent  + "% of track loaded ");
+                }
+            } else {
+                info('Trouble  ' + t.status);
+            }
+        });
+    } else if (status == 'error') {
+        info("Sorry, couldn't analyze that track");
+    }
+}
+
+
+function fetchAnalysis(trid) {
+    var url = 'http://static.echonest.com/infinite_jukebox_data/' + trid + '.json';
+    info('Fetching the analysis');
+    // showPlotPage(trid);
+    $.getJSON(url, function(data) { gotTheAnalysis(data); } )
+        .error( function() { 
+            info("Sorry, can't find info for that track");
+        });
+}
+
+function get_status(data) {
+    if (data.response.status.code == 0) {
+        return data.response.track.status;
+    } else {
+        return 'error';
+    }
+}
+
+
+
+var tilePrototype = {
+    normalColor:"#5f9",
+
+    move: function(x,y)  {
+        this.rect.attr( { x:x, y:y});
+        this.x = x;
+        this.y = y;
+    },
+
+    amove: function(x,y, time, delay, easing)  {
+        this.x = x;
+        this.y = y;
+
+        if (time === undefined) {
+            time = 500;
+        }
+
+        if (delay === undefined) {
+            delay = 0;
+        }
+
+        if (easing === undefined) {
+            easing = 'linear';
+        }
+        var anim = Raphael.animation({cx: 10, cy: 20}, 800);
+        var ranimator = Raphael.animation({ x:x, y: y}, time, easing);
+
+        this.rect.animate(ranimator.delay(delay));
+    },
+
+    play:function(force) {
+        if (force || shifted) {
+            this.playStyle();
+            player.play(this.q);
+        } else if (controlled) {
+            this.queueStyle();
+            player.queue(this.q);
+        } else {
+            this.selectStyle();
+        }
+        if (force) {
+            info("Selected tile " + this.q.which);
+            selectedTile = this;
+        }
+    },
+
+
+    pos: function() {
+        return {
+            x: this.x,
+            y: this.y
+        }
+    },
+
+    selectStyle: function() {
+        this.rect.attr("fill", "#C9a");
+    },
+
+    queueStyle: function() {
+        this.rect.attr("fill", "#aFF");
+    },
+
+    playStyle: function() {
+        this.rect.attr("fill", "#FF9");
+    },
+
+    normal: function() {
+        this.rect.attr("fill", this.normalColor);
+    },
+
+    highlight: function() {
+        this.rect.attr("fill", "#FFFFFF");
+    },
+
+    unplay: function() {
+        this.normal();
+        if (shifted) {
+            player.stop(this.q);
+        }
+    },
+
+    init:function() {
+        var that = this;
+        //this.rect.mouseover(function(event) { event.preventDefault(), mouseOverTile = that; that.play(); });
+        this.rect.mousedown(function(event) { 
+            event.preventDefault();
+            driver.setNextTile(that);
+            selectedTile = that;
+            if (!driver.isRunning()) {
+                //player.playNow(that.q);
+                driver.setIncr(1);
+                driver.start();
+            } 
+            if (shifted) {
+                driver.setIncr(1);
+            }
+            if (controlled) {
+                driver.setIncr(0);
+            }
+        });
+
+        this.rect.drag(
+            // on move
+            function(dx, dy, x, y) { 
+                that.move(startPos.x + dx, startPos.y + dy);
+                //this.connectedSet.transform('T' + (startPos.x + dx) + "," + (startPos.y + dy));
+            },
+
+            // on start
+            function() {
+                startPos = that.pos();
+                that.rect.toFront();
+            },
+
+            // on end
+            function(ctx) {
+                //iplayer.clear();
+
+                if (draggedOver) {
+                    var tp = that.pos();
+                    var op = draggedOver.pos();
+                    var insertBefore = tp.x < op.x;
+                    rearrange(insertBefore, that, draggedOver);
+                    refreshLayout(true);
+                    draggedOver.normal();
+                    draggedOver = null;
+                } else {
+                    var pos = that.pos();
+                    that.amove(pos.x, pos.y);
+                }
+            }
+        );
+
+        this.rect.onDragOver( 
+            function(over) {
+                if (draggedOver) {
+                    draggedOver.normal();
+                }
+                draggedOver = over.tile;
+                draggedOver.highlight();
+            }
+        );
+        //this.rect.mouseout(function() { mouseOverTile = null; that.unplay(); } );
+
+    }
+}
+
+
+function getQuantumColor(q) {
+    if (isSegment(q)) {
+        return getSegmentColor(q);
+    } else {
+        q = getQuantumSegment(q);
+        if (q != null) {
+            return getSegmentColor(q);
+        } else {
+            return "#7Fa";
+        }
+    }
+}
+
+function getQuantumSegment(q) {
+    while (! isSegment(q) ) {
+        if ('children' in q && q.children.length > 0) {
+            q = q.children[0]
+        } else {
+            break;
+        }
+    }
+
+    if (isSegment(q)) {
+        return q;
+    } else {
+        return null;
+    }
+}
+
+
+function isSegment(q) {
+    return 'timbre' in q;
+}
+
+function getSegmentColor(seg) {
+    return getColor(seg);
+}
+
+function tw() {
+    return 19;
+}
+
+function createTile(which, q) {
+    var labeled = false;
+    var tile = Object.create(tilePrototype);
+    tile.which = which;
+    tile.width = 16;
+    tile.height = 16;
+    tile.normalColor = getQuantumColor(q);
+
+    //tile.width = Math.round(80 * q.duration);
+
+    tile.rect = paper.rect(0, 0, tile.width, tile.height);
+    tile.rect.attr("stroke", "#349");
+    tile.rect.tile = tile;
+    tile.normal();
+    tile.q = q;
+    tile.init();
+    return tile;
+}
+
+function copyTile(tile) {
+    var ntile = Object.create(tilePrototype);
+    ntile.which = tile.which;
+    ntile.width = tile.width;
+    ntile.height = tile.height;
+    ntile.normalColor = tile.normalColor;
+
+    ntile.rect = paper.rect(0, 0, ntile.width, ntile.height);
+    ntile.rect.attr("stroke", "#349");
+    ntile.rect.tile = ntile;
+    ntile.normal();
+    ntile.q = tile.q;
+    ntile.init();
+    return ntile;
+}
+
+function sortTiles(sort, reverse) {
+    if (sort === 'timbre') {
+        if (selectedTile) {
+            info("Sorting based on timbral similarity to segment " + selectedTile.q.which);
+            calculateSegmentDistance(selectedTile, 'timbre', true);
+            sort = 'seg_distance';
+        } else {
+            info("No selected tile");
+        }
+    } else if (sort === 'pitch') {
+        if (selectedTile) {
+            info("Sorting based on pitch similarity to segment " + selectedTile.q.which);
+            calculateSegmentDistance(selectedTile, 'pitches', false);
+            sort = 'seg_distance';
+        } else {
+            info("No selected tile");
+        }
+    } else if (sort === 'segment') {
+        if (selectedTile) {
+            info("Sorting based on overall segment similarity " + selectedTile.q.which);
+            calculateOverallSegmentDistance(selectedTile);
+            sort = 'seg_distance';
+        } else {
+            info("No selected tile");
+        }
+    } 
+    tiles.sort(tile_sorter(sort, reverse));
+    refreshLayout(true);
+}
+
+
+function tile_sorter(qfield, reverse) {
+    return function(a,b) {
+        if (reverse) {
+            var tmp = b;
+            b = a;
+            a = tmp;
+        }
+        return a.q.overlappingSegments[0][qfield] - b.q.overlappingSegments[0][qfield];
+    };
+}
+
+function extendTiles(newTiles) {
+    for (var i = 0; i < newTiles.length; i++) {
+        tiles.push(newTiles[i]);
+    }
+}
+
+function renumberTiles() {
+    for (var i = 0; i < tiles.length; i++) {
+        tiles[i].which = i;
+    }
+}
+
+
+function createTilePanel(which) {
+    // removeAllTiles();
+    var newTiles = createTiles(which);
+    extendTiles(newTiles);
+    refreshLayout(false);
+}
+
+function normalizeColor() {
+    cmin = [100,100,100];
+    cmax = [-100,-100,-100];
+
+    var qlist = track.analysis.segments;
+    for (var i = 0; i < qlist.length; i++) {
+        for (var j = 0; j < 3; j++) {
+            var t = qlist[i].timbre[j];
+
+            if (t < cmin[j]) {
+                cmin[j] = t;
+            }
+            if (t > cmax[j]) {
+                cmax[j] = t;
+            }
+        }
+    }
+}
+
+function getColor(seg) {
+    var results = []
+    for (var i = 0; i < 3; i++) {
+        var t = seg.timbre[i];
+        var norm = (t - cmin[i]) / (cmax[i] - cmin[i]);
+        results[i] = norm * 255;
+    }
+    return to_rgb(results[0], results[1], results[2]);
+}
+
+function convert(value) { 
+    var integer = Math.round(value);
+    var str = Number(integer).toString(16); 
+    return str.length == 1 ? "0" + str : str; 
+};
+
+function to_rgb(r, g, b) { 
+    return "#" + convert(r) + convert(g) + convert(b); 
+}
+
+function removeAllTiles() {
+    for (var i =0; i < tiles.length; i++) {
+        tiles[i].rect.remove();
+    }
+    tiles = [];
+}
+
+function playall() {
+    for (var i =0; i < tiles.length; i++) {
+        player.queue(tiles[i].q);
+    }
+}
+
+function reverseTiles() {
+    rtiles = []
+    for (var i = tiles.length - 1; i >= 0;  i--) {
+        rtiles.push(tiles[i]);
+    }
+    tiles = rtiles;
+    refreshLayout(true);
+}
+
+mapper = {}
+
+function keydown(evt) {
+
+    if (evt.which == 39) {  // right arrow
+        var inc = driver.getIncr();
+        driver.setIncr(inc + 1);
+        evt.preventDefault();
+    }
+
+    if (evt.which == 37) {  // left arrow
+        evt.preventDefault();
+        var inc = driver.getIncr();
+        driver.setIncr(inc - 1);
+    }
+
+    if (evt.which ==38 ) {  // up arrow
+        driver.setIncr(1);
+        evt.preventDefault();
+    }
+
+    if (evt.which == 40  ) {  // down arrow
+        driver.setIncr(0);
+        evt.preventDefault();
+    }
+
+
+    if (evt.which == 219  ) {  // [
+        driver.setLoopStart();
+        evt.preventDefault();
+    }
+
+    if (evt.which == 221  ) {  // ]
+        driver.setLoopEnd();
+        evt.preventDefault();
+    }
+
+    if (evt.which == 220  ) {  // /
+        driver.loopCancel();
+    }
+
+    if (evt.which == 190  ) {  // , slower
+        var factor = player.getSpeedFactor() + .01;
+        player.setSpeedFactor(factor)
+        $("#speed").text(Math.round(factor * 100));
+        evt.preventDefault();
+    }
+
+    if (evt.which == 188  ) {  // . faster
+        var factor = player.getSpeedFactor() - .01;
+        if (factor < 0) {
+            factor = 0;
+        }
+        player.setSpeedFactor(factor)
+        $("#speed").text(Math.round(factor * 100));
+        evt.preventDefault();
+    }
+
+    if (evt.which == 191  ) {  // / reset
+        player.setSpeedFactor(1)
+        $("#speed").text(Math.round(100));
+        evt.preventDefault();
+    }
+
+    if (evt.which == 65  ) {  // a
+        var ct = driver.getCurTile();
+
+        if (ct !== null) {
+            var nextIndex = ct.which - 1;
+            driver.setIncr(0);
+            if (nextIndex >= 0) {
+                var nextTile = tiles[nextIndex];
+                driver.setNextTile(nextTile);
+            }
+        }
+        evt.preventDefault();
+    }
+
+
+
+    if (evt.which == 83  ) {  // s
+        driver.setIncr(0);
+        var ct = driver.getCurTile();
+        var delta = tilesPerRow;
+        if (ct !== null) {
+            var nextIndex = ct.which + delta;
+            if (nextIndex < tiles.length -1 && nextIndex >= 0) {
+                var nextTile = tiles[nextIndex];
+                driver.setNextTile(nextTile);
+            }
+        }
+        evt.preventDefault();
+    }
+
+    if (evt.which == 87  ) {  // w
+        driver.setIncr(0);
+        var ct = driver.getCurTile();
+        var delta = tilesPerRow;
+        if (ct !== null) {
+            var nextIndex = ct.which - delta;
+            if (nextIndex < tiles.length -1 && nextIndex >= 0) {
+                var nextTile = tiles[nextIndex];
+                driver.setNextTile(nextTile);
+            }
+        }
+        evt.preventDefault();
+    }
+
+    if (evt.which == 68  ) {  // d
+        driver.setIncr(0);
+        var ct = driver.getCurTile();
+
+        if (ct !== null) {
+            var nextIndex = ct.which + 1;
+            if (nextIndex < tiles.length -1) {
+                var nextTile = tiles[nextIndex];
+                driver.setNextTile(nextTile);
+            }
+        }
+        evt.preventDefault();
+    }
+
+    if (evt.which === 66  ) {  // b
+        driver.toggleBeatsTatums();
+        evt.preventDefault();
+    }
+
+    if (controlled && evt.which === 67  ) {  // c
+        if (selectedTile) {
+            copiedTile = copyTile(selectedTile);
+            insert(false, copiedTile, selectedTile);
+            refreshLayout(true);
+        }
+        evt.preventDefault();
+    }
+
+    if (evt.which === 71  ) {  // g
+        goBars();
+        evt.preventDefault();
+    }
+
+    if (evt.which == 17) {
+        controlled = true;
+    }
+
+    if (evt.which == 16) {
+        shifted = true;
+    }
+
+    if (evt.which == 32) {
+        evt.preventDefault();
+        if (driver.isRunning()) {
+            driver.stop();
+        } else {
+            driver.start();
+        }
+    }
+
+    if (shifted && isDigit(evt.keyCode)) {
+        mapper[evt.keyCode] = driver.getCurTile();
+    } else {
+        if (evt.keyCode in mapper) {
+            var tile = mapper[evt.keyCode];
+            if (tile != null) {
+                driver.setNextTile(tile);
+            }
+        }
+    }
+}
+
+function isDigit(key) {
+    return key >= 48 && key <= 57;
+}
+
+function keyup(evt) {
+    if (evt.which == 17) {
+        controlled = false;
+    }
+    if (evt.which == 16) {
+        shifted = false;
+    }
+    if (evt.keyCode in mapper) {
+        var tile = mapper[evt.keyCode];
+        if (tile != null) {
+            tile.normal();
+        }
+    }
+}
+
+
+function urldecode(str) {
+   return decodeURIComponent((str+'').replace(/\+/g, '%20'));
+}
+
+
+function init() {
+    jQuery.ajaxSettings.traditional = true;  
+
+    window.oncontextmenu = function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+    };
+
+    document.ondblclick = function DoubleClick(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+    }
+
+    paper = Raphael("tiles", 6, 4);
+
+    $(document).keydown(keydown);
+    $(document).keyup(keyup);
+
+
+    if (window.webkitAudioContext === undefined) {
+        error("Sorry, this app needs advanced web audio. Your browser doesn't"
+            + " support it. Try the latest version of Chrome or Safari");
+
+        hideAll();
+
+    } else {
+        var context = new webkitAudioContext();
+        remixer = createJRemixer(context, $);
+        player = remixer.getPlayer();
+        driver = Driver(player)
+        processParams();
+    }
+
+    (function($,sr){
+     
+      // debouncing function from John Hann
+      // http://unscriptable.com/index.php/2009/03/20/debouncing-javascript-methods/
+      var debounce = function (func, threshold, execAsap) {
+          var timeout;
+     
+          return function debounced () {
+              var obj = this, args = arguments;
+              function delayed () {
+                  if (!execAsap)
+                      func.apply(obj, args);
+                  timeout = null; 
+              };
+     
+              if (timeout)
+                  clearTimeout(timeout);
+              else if (execAsap)
+                  func.apply(obj, args);
+     
+              timeout = setTimeout(delayed, threshold || 100); 
+          };
+      }
+        // smartresize 
+        jQuery.fn[sr] = function(fn){  return fn ? this.bind('resize', debounce(fn)) : this.trigger(sr); };
+     
+    })(jQuery,'smartresize');
+
+    // usage:
+    $(window).smartresize(function(){  
+        refreshLayout(true);
+    });
+}
+
+
+var margin = 10;
+var top = 100;
+var tilesPerGroup = 4;
+var tspace = 3;
+var tilesPerRow = 0;
+
+function refreshLayout(animated) {
+    var nt = tiles.length;
+    renumberTiles();
+    if (nt > 0) {
+        var w = $(window).width();
+        var h = $(window).height() - top;
+        var rw = w - margin * 2;
+        var rh = h - margin * 2;
+        var groupWidth = tw() * (tilesPerGroup + 1);
+        var groupsPerRow = Math.floor(rw / groupWidth);
+        tilesPerRow =  groupsPerRow * tilesPerGroup;
+        var rows = Math.ceil(nt / tilesPerRow) + 1;
+        h = rows * tw();
+        paper.setSize(w, h);
+
+        layout = function (tiles, w, h, animated) {
+            var xstart = 0;
+            var ystart = 0;
+
+            for (var i = 0; i < tiles.length; i++) {
+                var tile = tiles[i];
+                if (i % 4 === 0) {
+                    xstart += tile.width + tspace / 2;
+                }
+
+                if (i % tilesPerRow === 0) {
+                    xstart = 10;
+                    ystart += tile.height + tspace;
+                }
+                if (animated) {
+                    tile.amove(xstart, ystart);
+                } else {
+                    tile.move(xstart, ystart);
+                }
+                xstart += tile.width + tspace;
+                if (false && (xstart + tile.width) > w) {
+                    xstart = 0;
+                    ystart += tile.height + tspace;
+                }
+            }
+        };
+        layout(tiles, w, h, animated);
+    } 
+}
+
+
+function showPlotPage(trid) {
+    var url = location.protocol + "//" + 
+                location.host + location.pathname + "?trid=" + trid;
+    location.href = url;
+}
+
+function analyzeAudio(audio, tag, callback) {
+    var url = 'http://labs.echonest.com/Uploader/qanalyze?callback=?'
+    $.getJSON(url, { url:audio, tag:tag}, function(data) {
+        if (data.status === 'done' || data.status === 'error') {
+            callback(data);
+        } else {
+            info(data.status + ' - ready in about ' + data.estimated_wait + ' secs. ');
+            setTimeout(function() { analyzeAudio(audio, tag, callback); }, 5000);
+        } 
+    });
+}
+
+function processParams() {
+    var params = {};
+    var q = document.URL.split('?')[1];
+    if(q != undefined){
+        q = q.split('&');
+        for(var i = 0; i < q.length; i++){
+            var pv = q[i].split('=');
+            var p = pv[0];
+            var v = pv[1];
+            params[p] = v;
+        }
+    }
+
+    if ('trid' in params) {
+        var trid = params['trid'];
+        fetchAnalysis(trid);
+    } else if ('key' in params) {
+        var url = 'http://' + params['bucket'] + '/' + urldecode(params['key']);
+        info("analyzing audio");
+        $("#select-track").hide();
+        analyzeAudio(url, 'tag', 
+            function(data) {
+                if (data.status === 'done') {
+                    showPlotPage(data.trid);
+                } else {
+                    info("Trouble analyzing that track " + data.message);
+                }
+            }
+        );
+    }
+    else {
+        setDisplayMode(false);
+    }
+}
+
+function Driver(player) {
+    var curTile = null;
+    var curOp = null;
+    var incr = 1;
+    var nextTile = null;
+    var loopStart = null;
+    var loopEnd = null;
+    var isBeats = true;
+
+    var tileDiv = $("#tile");
+    var incrDiv = $("#incr");
+
+    function next() {
+        if (curTile == null || curTile == undefined) {
+            return tiles[0];
+        } else {
+            var which = curTile.which;
+            var next = which + incr
+            if (next >= tiles.length) {
+                return null;
+            } else if (next < 0) {
+                return curTile;
+            } else {
+                return tiles[next];
+            }
+        }
+    }
+
+
+    function stop () {
+        curOp = null;
+        curTile = null;
+        incr = 1;
+        player.stop();
+    }
+
+    function process() {
+        if (curTile !== null && curTile !== undefined) {
+            curTile.normal();
+        }
+
+        if (curOp) {
+            if (nextTile != null) {
+                curTile = nextTile;
+                nextTile = null;
+            } else if (curTile === loopEnd  && loopStart !== null) {
+                curTile = loopStart;
+            } else {
+                curTile = curOp();
+            }
+
+            if (curTile !== null) {
+                var delay = player.play(0, curTile.q);
+                setTimeout( function () { process(); }, 1000 * delay);
+                curTile.playStyle();
+                tileDiv.text(curTile.which);
+                incrDiv.text(incr);
+            } else {
+                stop();
+            }
+        }
+    }
+
+    var interface = {
+        start: function() {
+            curOp = next;
+            process();
+            $("#inc").text(incr);
+        },
+
+        stop: stop,
+
+        isRunning: function() {
+            return curOp !== null;
+        },
+
+        getIncr: function() {
+            return incr;
+        },
+
+        getCurTile : function() {
+            return curTile;
+        },
+
+        setIncr: function(inc) {
+            incr = inc;
+            incrDiv.text(incr);
+        }, 
+
+        setNextTile: function(tile) {
+            nextTile = tile;
+        },
+
+        setLoopStart: function() {
+            loopStart = curTile;
+        },
+
+        setLoopEnd: function() {
+            loopEnd = curTile;
+        },
+
+        loopCancel: function() {
+            loopStart = null;
+            loopEnd = null;
+        },
+
+        toggleBeatsTatums : function() {
+            if (!isBeats) {
+                goBeats();
+                if (curTile) {
+                    var which = Math.round(curTile.which / 2);
+                    curTile = tiles[which];
+                }
+            } else {
+                goTatums();
+                if (curTile) {
+                    var which = curTile.which * 2;
+                    curTile = tiles[which];
+                }
+            }
+            isBeats = !isBeats
+        },
+
+        isBeats: function() {
+            return isBeats;
+        }
+    }
+    return interface;
+}
+
+
+
+window.onload = init;
+
+
+function ga_track(page, action, id) {
+    _gaq.push(['_trackEvent', page, action, id]);
+}
+</script>
+
