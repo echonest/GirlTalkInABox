@@ -35,6 +35,7 @@
 </div>
 
 <div id='info'> </div> 
+<div id='error'> </div> 
 <div id="help" class="hero-unit">
   <div class="container">
     <h2> Girl Talk in a box</h2>
@@ -120,6 +121,15 @@ if (typeof Object.create !== 'function') {
 
 function info(s) {
     $("#info").text(s);
+}
+
+function error(s) {
+    if (s.length == 0) {
+        $("#error").hide();
+    } else {
+        $("#error").text(s);
+        $("#error").show();
+    }
 }
 
 function goBars() {
@@ -825,6 +835,8 @@ function init() {
         event.stopPropagation();
         return false;
     }
+
+    $("#error").hide();
 
     paper = Raphael("tiles", 6, 4);
 
