@@ -962,6 +962,21 @@ function processParams() {
     if ('trid' in params) {
         var trid = params['trid'];
         fetchAnalysis(trid);
+
+        if ('p' in params) {
+            var factor = parseInt(params['p']);
+            if (factor >= 0) {
+                player.setSpeedFactor(factor / 100.)
+                $("#speed").text(Math.round(factor));
+            }
+        }
+
+        if ('inc' in params) {
+            var inc = parseInt(params['inc']);
+            if (inc > -200 && inc < 200) {
+                driver.setIncr(inc);
+            }
+        }
     } else if ('key' in params) {
         var url = 'http://' + params['bucket'] + '/' + urldecode(params['key']);
         info("analyzing audio");
