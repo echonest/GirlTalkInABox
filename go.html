@@ -101,6 +101,7 @@ var paper;
 var tiles = [];
 var selectedTile;
 var mouseOverTile;
+var tatumMode = false;
 
 var shifted = false;
 var controlled = false;
@@ -191,7 +192,11 @@ function readyToPlay(t) {
         setDisplayMode(true);
         info("ready!");
         normalizeColor();
-        goBeats();
+        if (tatumMode) {
+            goTatums();
+        } else {
+            goBeats();
+        }
         showTrackTitle(t);
     } else {
         info(t.status);
@@ -353,7 +358,7 @@ var tilePrototype = {
             selectedTile = that;
             if (!driver.isRunning()) {
                 //player.playNow(that.q);
-                driver.setIncr(1);
+                //driver.setIncr(1);
                 driver.start();
             } 
             if (shifted) {
@@ -961,7 +966,6 @@ function processParams() {
 
     if ('trid' in params) {
         var trid = params['trid'];
-        fetchAnalysis(trid);
 
         if ('p' in params) {
             var factor = parseInt(params['p']);
@@ -973,10 +977,17 @@ function processParams() {
 
         if ('inc' in params) {
             var inc = parseInt(params['inc']);
+            console.log('inc is', inc);
             if (inc > -200 && inc < 200) {
                 driver.setIncr(inc);
             }
         }
+        if ('b' in params) {
+            if (params['b'] == 'tatums') {
+                tatumMode = true;
+            }
+        }
+        fetchAnalysis(trid);
     } else if ('key' in params) {
         var url = 'http://' + params['bucket'] + '/' + urldecode(params['key']);
         info("analyzing audio");
