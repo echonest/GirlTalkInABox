@@ -34,7 +34,15 @@
   </div>
 </div>
 
-<div id='info'> </div> 
+<div id='info-div'>
+<span id='info'> </span> 
+<span id='tweet-span'> 
+    <a href="https://twitter.com/share" id='tweet' class="twitter-share-button" data-lang="en" data-count='none'>Tweet</a>
+    <script>!function(d,s,id){var
+    js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="https://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</span>
+</div>
+
 <div id='error'> </div> 
 <div id="help" class="hero-unit">
   <div class="container">
@@ -61,13 +69,17 @@
 <div id="hero">
     <div id='tiles'></div>
     <div id="stats">
+        <button class="btn btn-small" id='reset'>Reset</button>
+        <button class="btn btn-small" id='play'>Play</button>
         <span id="numbers"> 
             Tile: <span class='nval' id='tile'> 1 </span> 
             Period: <span class='nval' id='speed'> 100 </span> 
             Incr: <span class='nval' id='incr'>1</span> 
+            <span class='nval' id='bmode'>bars</span> 
         </span>
     </div>
 </div>
+
 
 
 </body>
@@ -103,6 +115,7 @@ var tiles = [];
 var selectedTile;
 var mouseOverTile;
 var tatumMode = false;
+var bMode = 'beats';
 
 var shifted = false;
 var controlled = false;
@@ -133,18 +146,18 @@ function error(s) {
 }
 
 function goBars() {
-    removeAllTiles();
-    createTilePanel('bars');
+    bMode = 'bars';
+    createTilePanel(bMode);
 }
 
 function goBeats() {
-    removeAllTiles();
-    createTilePanel('beats');
+    bMode = 'beats';
+    createTilePanel(bMode);
 }
 
 function goTatums() {
-    removeAllTiles();
-    createTilePanel('tatums');
+    bMode = 'tatums';
+    createTilePanel(bMode);
 }
 
 
@@ -186,9 +199,13 @@ function setDisplayMode(playMode) {
     if (playMode) {
         $("#help").hide();
         $("#hero").show();
+        $("#play").show();
+        $("#tweet-span").show();
     } else {
         $("#help").show();
         $("#hero").hide();
+        $("#play").hide();
+        $("#tweet-span").hide();
     } 
 }
 
@@ -197,17 +214,22 @@ function showTrackTitle(t) {
     info(t.title + ' by ' + t.artist);
 }
 
+
+function trackReady(t) {
+    t.fixedTitle = getTitle(t.title, t.artist, t.info.url);
+    document.title = 'Girl Talk in a Box for ' + t.fixedTitle;
+    // $("#song-title").text(t.fixedTitle);
+}
+
 function readyToPlay(t) {
     if (t.status === 'ok') {
+        trackReady(t);
         setDisplayMode(true);
         info("ready!");
         normalizeColor();
-        if (tatumMode) {
-            goTatums();
-        } else {
-            goBeats();
-        }
+        createTilePanel(bMode);
         showTrackTitle(t);
+        tweetSetup(t);
     } else {
         info(t.status);
     }
@@ -559,7 +581,8 @@ function renumberTiles() {
 
 
 function createTilePanel(which) {
-    // removeAllTiles();
+    $("#bmode").text(which);
+    removeAllTiles();
     var newTiles = createTiles(which);
     extendTiles(newTiles);
     refreshLayout(false);
@@ -669,8 +692,7 @@ function keydown(evt) {
 
     if (evt.which == 190  ) {  // , slower
         var factor = player.getSpeedFactor() + .01;
-        player.setSpeedFactor(factor)
-        $("#speed").text(Math.round(factor * 100));
+        setSpeedFactor(factor)
         evt.preventDefault();
     }
 
@@ -679,14 +701,12 @@ function keydown(evt) {
         if (factor < 0) {
             factor = 0;
         }
-        player.setSpeedFactor(factor)
-        $("#speed").text(Math.round(factor * 100));
+        setSpeedFactor(factor)
         evt.preventDefault();
     }
 
     if (evt.which == 191  ) {  // / reset
-        player.setSpeedFactor(1)
-        $("#speed").text(Math.round(100));
+        setSpeedFactor(1)
         evt.preventDefault();
     }
 
@@ -823,6 +843,7 @@ function urldecode(str) {
 
 function init() {
     jQuery.ajaxSettings.traditional = true;  
+    setDisplayMode(false);
 
     window.oncontextmenu = function(event) {
         event.preventDefault();
@@ -837,6 +858,26 @@ function init() {
     }
 
     $("#error").hide();
+
+    $("#play").click(
+        function() {
+            if (driver.isRunning()) {
+                driver.stop();
+            } else {
+                driver.start();
+            }
+        }
+    );
+
+    $("#reset").click(
+        function() {
+            driver.setIncr(1);
+            setSpeedFactor(1);
+            driver.stop();
+            goBeats();
+            setURL();
+        }
+    );
 
     paper = Raphael("tiles", 6, 4);
 
@@ -963,6 +1004,57 @@ function analyzeAudio(audio, tag, callback) {
     });
 }
 
+function setURL() {
+    if (track) {
+        var p = '?trid=' + track.id;
+        if (driver.getIncr() != 1) {
+            p += '&inc=' + driver.getIncr();
+        }
+
+        var factor = Math.round(100 * player.getSpeedFactor());
+        if (factor != 100) {
+            p += '&p=' + factor;
+        }
+
+        if (bMode != 'beats') {
+            p += '&b=' + bMode;
+        }
+    }
+
+    history.replaceState({}, document.title, p);
+    tweetSetup(track);
+}
+
+function tweetSetup(t) {
+    $(".twitter-share-button").remove();
+    var tweet = $('<a>')
+        .attr('href', "https://twitter.com/share")
+        .attr('id', "tweet")
+        .attr('class', "twitter-share-button")
+        .attr('data-lang', "en")
+        .attr('data-count', "none")
+        .text('Tweet');
+
+    $("#tweet-span").prepend(tweet);
+    if (t) {
+        tweet.attr('data-text',  "Listen to my version of " + t.fixedTitle + " #GirlTalkInABox");
+        tweet.attr('data-url', document.URL);
+    } 
+    // twitter can be troublesome. If it is not there, don't bother loading it
+    if ('twttr' in window) {
+        twttr.widgets.load();
+    }
+}
+
+function isValidBeatMode(p) {
+    return p === 'bars' || p == 'beats' || p == 'tatums';
+}
+
+function setSpeedFactor(factor) {
+    player.setSpeedFactor(factor)
+    $("#speed").text(Math.round(factor * 100));
+}
+
 function processParams() {
     var params = {};
     var q = document.URL.split('?')[1];
@@ -982,21 +1074,20 @@ function processParams() {
         if ('p' in params) {
             var factor = parseInt(params['p']);
             if (factor >= 0) {
-                player.setSpeedFactor(factor / 100.)
-                $("#speed").text(Math.round(factor));
+                setSpeedFactor(factor / 100.)
             }
         }
 
         if ('inc' in params) {
             var inc = parseInt(params['inc']);
-            console.log('inc is', inc);
             if (inc > -200 && inc < 200) {
                 driver.setIncr(inc);
             }
         }
         if ('b' in params) {
-            if (params['b'] == 'tatums') {
-                tatumMode = true;
+            nbMode = params['b'];
+            if (isValidBeatMode(nbMode)) {
+                bMode = nbMode;
             }
         }
         fetchAnalysis(trid);
@@ -1051,8 +1142,10 @@ function Driver(player) {
     function stop () {
         curOp = null;
         curTile = null;
-        incr = 1;
         player.stop();
+        $("#play").text("Play");
+        setURL();
+        $("#tweet-span").show();
     }
 
     function process() {
@@ -1087,6 +1180,9 @@ function Driver(player) {
             curOp = next;
             process();
             $("#inc").text(incr);
+            $("#play").text("Stop");
+            $("#tweet-span").hide();
+            setURL();
         },
 
         stop: stop,
