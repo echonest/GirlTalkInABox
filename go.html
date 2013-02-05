@@ -44,6 +44,19 @@
 </div>
 
 <div id='error'> </div> 
+<div id="hero">
+    <div id='tiles'></div>
+    <div id="stats">
+        <button class="btn btn-small" id='reset'>Reset</button>
+        <button class="btn btn-small" id='play'>Play</button>
+        <span id="numbers"> 
+            Tile: <span class='nval' id='tile'> 1 </span> 
+            Period: <span class='nval' id='speed'> 100 </span> 
+            Incr: <span class='nval' id='incr'>1</span> 
+            <span class='nval' id='bmode'>bars</span> 
+        </span>
+    </div>
+</div>
 <div id="help" class="hero-unit">
   <div class="container">
     <h2> Girl Talk in a box</h2>
@@ -66,19 +79,6 @@
 </div>
 
 
-<div id="hero">
-    <div id='tiles'></div>
-    <div id="stats">
-        <button class="btn btn-small" id='reset'>Reset</button>
-        <button class="btn btn-small" id='play'>Play</button>
-        <span id="numbers"> 
-            Tile: <span class='nval' id='tile'> 1 </span> 
-            Period: <span class='nval' id='speed'> 100 </span> 
-            Incr: <span class='nval' id='incr'>1</span> 
-            <span class='nval' id='bmode'>bars</span> 
-        </span>
-    </div>
-</div>
 
 
 
@@ -176,6 +176,16 @@ function createTiles(qtype) {
 }
 
 
+function extractTitle(url) {
+    var lastSlash = url.lastIndexOf('/');
+    if (lastSlash >= 0 && lastSlash < url.length - 1) {
+        var res =  url.substring(lastSlash + 1, url.length - 4);
+        return res;
+    } else {
+        return url;
+    }
+}
+
 function getTitle(title, artist, url) {
     if (title == undefined || title.length == 0 || title === '(unknown title)' || title == 'undefined') {
         if (url) {
@@ -197,12 +207,12 @@ function loadTrack(trid) {
 
 function setDisplayMode(playMode) {
     if (playMode) {
-        $("#help").hide();
+        //$("#help").hide();
         $("#hero").show();
         $("#play").show();
         $("#tweet-span").show();
     } else {
-        $("#help").show();
+        //$("#help").show();
         $("#hero").hide();
         $("#play").hide();
         $("#tweet-span").hide();
