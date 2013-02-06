@@ -231,7 +231,8 @@ function createJRemixer(context, jquery) {
                     return when;
                 } else if (isQuantum(q)) {
                     var audioSource = context.createBufferSource();
-                    var duration = q.duration * .7;
+                    //var duration = q.duration * .7;
+                    var duration = q.duration;
                     audioSource.buffer = q.track.buffer;
                     audioSource.connect(audioGain);
                     audioSource.noteGrainOn(when, q.start, duration);
